@@ -1,0 +1,108 @@
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get install asterisk 
+
+
+Type the following to move the original sip.conf
+sudo mv /etc/asterisk/sip.conf /etc/asterisk/sip.conf.orig
+
+Creating a new sip.conf and configuring it
+Type the following to create a new sip.conf
+
+sudo vi /etc/asterisk/sip.conf
+
+[general]
+context=internal
+allowguest=no
+allowoverlap=no
+bindport=5060
+bindaddr=0.0.0.0
+srvlookup=no
+disallow=all
+allow=ulaw
+alwaysauthreject=yes
+canreinvite=no
+nat=yes
+session-timers=refuse
+localnet=192.168.1.0/255.255.255.0
+
+[7001]
+type=friend
+host=dynamic
+secret=123
+context=internal
+
+[7002]
+type=friend
+host=dynamic
+secret=456
+context=internal
+Image below for reference.
+
+You can save this file by first pressing ESC then letting go.
+Followed by holding Shift and : then letting go again.
+Now type wq! followed by pressing enter.
+Your file is now saved.
+Making a backup of extensions.conf
+Type the following to move the original extensions.conf
+sudo mv /etc/asterisk/extensions.conf /etc/asterisk/extensions.conf.orig
+Creating a new extensions.conf and configuring it
+Type the following to create a new extensions.conf
+sudo vi /etc/asterisk/extensions.conf
+[internal]
+exten => 7001,1,Answer()
+exten => 7001,2,Dial(SIP/7001,60)
+exten => 7001,3,Playback(vm-nobodyavail)
+exten => 7001,4,VoiceMail(7001@main)
+exten => 7001,5,Hangup()
+
+exten => 7002,1,Answer()
+exten => 7002,2,Dial(SIP/7002,60)
+exten => 7002,3,Playback(vm-nobodyavail)
+exten => 7002,4,VoiceMail(7002@main)
+exten => 7002,5,Hangup()
+
+exten => 8001,1,VoicemailMain(7001@main)
+exten => 8001,2,Hangup()
+
+exten => 8002,1,VoicemailMain(7002@main)
+exten => 8002,2,Hangup()
+Image below for reference.
+
+You can save this file by first pressing ESC then letting go.
+Followed by holding Shift and : then letting go again.
+Now type wq! followed by pressing enter.
+Your file is now saved.
+Making a backup of voicemail.conf
+Type the following to move the original voicemail.conf
+sudo mv /etc/asterisk/voicemail.conf /etc/asterisk/voicemail.conf.orig
+Creating a new voicemail.conf and configuring it
+Type the following to create a new voicemail.conf
+sudo vi /etc/asterisk/voicemail.conf
+[main]
+7001 => 123
+
+7002 => 456
+Image below for reference.
+
+You can save this file by first pressing ESC then letting go.
+Followed by holding Shift and : then letting go again.
+Now type wq! followed by pressing enter.
+Your file is now saved.
+Reloading Asterisk to apply the configuration
+You can restart asterisk by any of the three following ways:
+
+Method 1
+sudo asterisk -rx reload
+Method 3
+sudo /etc/init.d/asterisk restart
+Method 2
+sudo asterisk -r
+Followed by typing:
+reload
+Followed by typing:
+exit
+
+
+First connect :
+Use 'asterisk -r' to connect.

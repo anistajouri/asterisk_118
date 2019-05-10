@@ -1,0 +1,7 @@
+#!/bin/bash
+INIT_CHAT_1=$(echo $INIT_CHAT)
+INIT_CHAT_1=$(head -n 1 /tmp/a.txt)
+
+echo "set variable INIT_CHAT \"${INIT_CHAT_1}\""
+read line
+exit 0

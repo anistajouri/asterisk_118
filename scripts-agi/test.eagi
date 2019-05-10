@@ -1,0 +1,120 @@
+#!/bin/bash
+echo "exec noop \"Number of dd blocks to store : Test\""
+read line
+exit 0
+# Read all variables sent by Asterisk store them as an array, but won't use them
+declare -a array
+while read -e ARG && [ "$ARG" ] ; do
+        array=(` echo $ARG | sed -e 's/://'`)
+        export ${array[0]}=${array[1]}
+done
+
+# First argument is language
+case "$1" in
+"fr-FR" | "en-GB" | "es-ES" | "it-IT" )
+  LANG=$1
+  ;;
+*)
+  LANG=en-US
+  ;;
+esac
+
+NODECMD=$(which node)
+
+# Second argument is a timeout, in seconds. The duration to wait for voice input form the caller.
+DURATION=$2
+#DURATION=5
+SAMPLE_RATE=8000
+SAMPLE_SIZE_BYTES=2
+let "SAMPLE_SIZE_BITS = SAMPLE_SIZE_BYTES * 8"
+
+# EAGI_AUDIO_FORMAT is an asterisk variable that specifies the sample rate and
+# sample size (usually 16 bits per sample) of the caller's voice stream.
+# Depending on the codec used here, you can get sample rate values ranging from
+# 8000Hz (e.g. G.711 uLaw) to 48000Hz (e.g. opus).
+echo "GET VARIABLE EAGI_AUDIO_FORMAT"
+read line
+EAGI_AUDIO_FORMAT=$(echo $line | sed -r 's/.*\((.*)\).*/\1/')
+
+# 5 seconds of audio input are gathered in ( SAMPLE_RATE / sample_size ) * 5 bytes
+# - SAMPLE_RATE is set as per EAGI_AUDIO_FORMAT
+# - sample_size is set to 2 (16 bits per sample)
+#
+# We don't do much here to adapt the sample rate, this code should be improved
+case "${EAGI_AUDIO_FORMAT}" in
+"slin48")
+  SAMPLE_RATE=48000
+  ;;
+*)
+  SAMPLE_RATE=8000
+  ;;
+esac
+
+# Temporary file to store raw audio samples
+AUDIO_FILE=/tmp/audio-${SAMPLE_SIZE_BITS}_bits-${SAMPLE_RATE}_hz-${DURATION}_sec.raw
+
+# We use `dd` here to copy the raw audio samples we're getting from file
+# descriptor 3 (this is the Enhanced version in EAGI) to the temporary file.
+# The number of blocks to copy is a function of the DURATION to record audio and
+# the sample rate. SAMPLE_SIZE_BYTES cannot be changed as it is assumed that each
+# sample is 16 bits in size.
+let "COUNT = SAMPLE_RATE * SAMPLE_SIZE_BYTES * DURATION"
+# By default, dd stores blocks of 512 bytes
+let "BLOCKS = COUNT / 512"
+echo "exec noop \"Number of bytes to store : ${COUNT}\""
+read line
+
+echo "exec noop \"Number of dd blocks to store : ${BLOCKS}\""
+read line
+
+echo "exec playback \"beep\""
+read line
+
+dd if=/dev/fd/3 count=${BLOCKS} of=${AUDIO_FILE}
+echo "exec noop \"File saved !\""
+
+echo "exec noop \"AUDIO_FILE : ${AUDIO_FILE}\""
+read line
+echo "exec noop \"SAMPLE_RATE : ${SAMPLE_RATE}\""
+read line
+echo "exec noop \"LANG : ${LANG}\""
+read line
+echo "exec playback \"beep\""
+read line
+
+T1=$(date +%s.%N)
+# Submit audio to Google Cloud Speech API and get the result
+export GOOGLE_APPLICATION_CREDENTIALS=/usr/local/node_programs/service_account_file.json
+RES=$(${NODECMD} /usr/local/node_programs/nodejs-speech/samples/recognize.js sync ${AUDIO_FILE} -e LINEAR16 -r ${SAMPLE_RATE} -l ${LANG})
+
+# clean up result returned from recognize.js :
+# - remove new lines
+# - remove 'Transcription :' header
+RES=$(echo $RES | tr -d '\n' | sed -e 's/Transcription: \(.*$\)/\1/')
+
+# Set GOOGLE_TRANSCRIPTION_RESULT variable, remove temporary file
+# and continue dialplan execution
+echo "set variable GOOGLE_TRANSCRIPTION_RESULT \"${RES}\""
+read line
+
+#RES2=$(/usr/local/node_programs/nodejs-speech/samples/chatbot.bash ${RES})
+
+RES2=$(/usr/local/node_programs/nodejs-speech/samples/chatbot.bash ${RES})
+RES2=${RES2::-1}
+T2=$(date +%s.%N)
+
+TT=$(echo "$T2-$T1" |bc)
+
+echo "exec noop \"T1 : ${T1}\""
+echo "exec noop \"T2 : ${T2}\""
+echo "exec noop \"Total time : ${TT}\""
+echo "exec noop \"CHATBOT : ${RES2}\""
+read line
+
+echo "set variable CHATBOT_RESULT \"${RES2}\""
+read line
+
+
+#/bin/rm -f ${AUDIO_FILE}
+
+exit 0
